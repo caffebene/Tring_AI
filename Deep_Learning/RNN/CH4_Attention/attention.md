@@ -1,5 +1,5 @@
 [TOC]
-# 任务：注意力机制
+# 任务12：注意力机制
 
 ## 1 任务目标
 
@@ -299,12 +299,12 @@ def translate(sentence):
 #翻译括号中的句子，然后把模型注意的地方高亮出来
 translate(u'hace mucho frio aqui.')
 ```
-![](.\result1.png)
+![](./result1.png)
 
 从可视化的结果可以看到，由于我们训练样本设置的比较少，所以效果比较一般，如果我们使用全部样本进行训练，可以得到下面的结果。
 
 
-![](.\result.png)
+![](./result.png)
 ## 5 任务拓展
 
 - 事实上，在the Attention Model论文中，模型的Encoder用的是改良版RNN：双向RNN（Bi-directional RNN）。以往单向RNN的问题在于$t$时刻的输出只能依靠$t$时刻之前的信息，但实际上有时候需要利用$t$时刻之后的信息才能回答$t$时刻的问题，由此有了双向RNN，两个隐状态$h，h'$，分别从左到右，从右到左，从而可以做出更好的回答。
