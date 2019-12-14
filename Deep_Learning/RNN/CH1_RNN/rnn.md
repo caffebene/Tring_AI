@@ -1,0 +1,188 @@
+[TOC]
+# 任务1：使用循环神经网络进行时序预测
+
+## 1 任务目标
+
+- 了解循环神经网络的用途
+
+- 理解循环神经网络网络结构
+
+- 搭建一个简单的循环神经网络并预测时间序列的趋势 
+
+  
+
+
+## 2 任务描述
+
+- 在TensorFlow深度学习框架下，搭建一个简单的循环神经网络
+
+- 使用循环神经网络对一组时间序列数据进行拟合并对数据趋势做出预测
+
+  
+
+
+## 3 知识准备
+
+### 3.1 循环神经网络（RNN）
+
+- 在实际应用中，我们会遇到很多序列化数据，如：
+  - 自然语言处理问题，一句话中每个字都是有序的，如果这些字是无序的，那我们会很难理解这一句话的含义。
+  - 语音识别问题，一段话中每一帧的声音信号也是有序的。
+  - 时间序列问题，如每天的股票价格、室外温度变化等等。
+- 循环神经网络（Recurrent Neural Network，RNN）是一类处理序列化数据的神经网络，可以对任意长度的序列数据进行建模。而原始的神经网络如多层感知机，要求输入的长度是固定已知的，因此无法像RNN一样灵活地处理序列化数据的模型。
+  
+
+### 3.2 RNN模型结构
+
+
+
+![](./rnn.jpg)
+
+  
+
+
+
+- 上图给出了循环神经网络的模型结构，其中右边的模型是将左边的模型按时间步来展开，两种模型结构是等价的。图中的$V,W,U$都是网络中需要被训练的参数，对参数进行随机初始化后，需要依赖反向传播算法来不断更新这些参数，得到我们最终的循环神经网络模型。
+- 从模型中我们可以看出，循环神经网络的循环之处在于它将上一时刻的输出的$h_{t-1}$和$x_t$作为模型这个时刻的输入。这种结构设计使得RNN可以接受任意长度的序列数据，可以将t时刻以前的信息保留下来，使得模型具有更好的表达能力。
+- 一般来说，仅靠线性加权来计算$h_{t-1}和X_t$的信息是不够的，通常还要进行一个非线性函数对数据做一个非线性变化，使得模型能够对复杂数据进行学习和表示，常用的非线性函数有tanh，或者Relu函数。
+
+  ![](./rnn2.png)
+- 此外，循环神经网络相比于原始神经网络还有一大优点，那就是参数共享。也就是在每一个时间步中，我们计算中间输出$h_t$和标签输出$o_t$时使用的都是同一组$V,W,U$参数，这使得网络中需要训练的参数量大大减少，节省了大量计算开销。
+
+
+
+
+## 4 任务实施
+
+### 4.1 实施思路
+
+- 这一节中我们将在TensorFlow框架下搭建一个循环神经网络并对一个序列数据做预测，实施思路如下。
+  1. 生成一组时间序列数据
+  2. 使用TensorFlow搭建一个循环神经网络RNN
+  3. 利用第1步产生的时间序列数据对RNN进行训练
+  4. 将第3步训练得到的RNN模型用于预测时间序列数据的变化趋势
+  5. 将RNN的预测结果与正确的变化趋势做对比，并可视化结果。
+
+
+
+
+### 4.2 实施步骤
+
+#### 步骤1：搭建循环神经网络RNN
+
+```python
+
+# 先设置一下模型会用到的参数
+n_steps = 100 # batch_size,训练一次用多少数据
+n_iterations = 900  #迭代次数
+n_inputs = 1 # 输入的维度
+n_outputs = 1 # 输出的维度
+learning_rate = 0.0001 # 学习率
+
+#清空计算图
+tf.reset_default_graph()
+
+#定义模型的输入输出及其维度
+X = tf.placeholder(tf.float32, [None, n_steps, n_inputs])
+y = tf.placeholder(tf.float32, [None, n_steps, n_outputs])
+
+#tf里面已经有封装好的基本RNN，直接调用
+cell = tf.contrib.rnn.OutputProjectionWrapper(
+        tf.contrib.rnn.BasicRNNCell(num_units=128, activation=tf.nn.relu), #因为数据是非线性的，所以设置relu作为激活函数
+         output_size=n_outputs) 
+
+outputs, states = tf.nn.dynamic_rnn(cell, X, dtype=tf.float32)
+loss = tf.reduce_mean(tf.square(outputs - y)) #定义模型的损失函数为均方误差
+optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate) #选择更新参数的方法为adam
+training_op = optimizer.minimize(loss) #最小化损失函数
+
+```
+
+
+
+#### 步骤2：生成一组时间序列数据并转化数据格式
+
+```python
+#设置一些变量方便改动
+minimum = 0
+maximum = 60
+data_points = np.linspace(minimum, maximum, (maximum-minimum)*10) #产生(maximum-minimum)*10个数据点
+dataset = np.sin(data_points)
+
+
+#这里定义一个函数，将数据转换成我们训练模型所需要的数据格式
+def create_training_dataset(dataset, n_steps, n_outputs):
+    dataX, dataY = [], []
+    for i in range(500):  
+        x = dataset[i]
+        y = dataset[i+1]
+        dataX.append(x)
+        dataY.append(y)
+    dataX, dataY =  np.array(dataX), np.array(dataY)
+    dataX = np.reshape(dataX, (-1, n_steps, n_outputs))
+    dataY = np.reshape(dataY, (-1, n_steps, n_outputs))    
+    return dataX, dataY
+
+dataX, dataY = create_training_dataset(dataset, n_steps, n_outputs) #得到训练数据
+```
+
+
+
+#### 步骤3：训练RNN并进行预测
+
+```python
+init = tf.global_variables_initializer()
+with tf.Session() as sess:
+    init.run() #按照模型的结构进行运算
+    for iteration in range(n_iterations):
+        X_batch, y_batch = dataX, dataY
+        _, prediction =sess.run((training_op, outputs), feed_dict={X: X_batch, y: y_batch})
+
+        if iteration % 150 == 0: #每迭代150次输出一下均方误差，查看训练情况
+            mse = loss.eval(feed_dict={X: X_batch, y: y_batch})
+            print(iteration, "\t MSE", mse)
+
+            #对数据进行预测
+            num_batches = X_batch.shape[0]
+            sequence = X_batch[num_batches-1,:,:].reshape(-1).tolist()
+
+            prediction_iter = 100 #想要预测的长度
+            for iteration in range(prediction_iter):
+                X_batch = np.array(sequence[-n_steps:]).reshape(1, n_steps, 1) #输入值
+                y_pred = sess.run(outputs, feed_dict={X: X_batch}) #预测值
+                sequence.append(y_pred[0, -1, 0])
+
+```
+
+
+
+
+
+
+## 5 任务拓展
+
+- 循环神经网络的灵活性不仅在于它可以处理任意长度的序列数据，也在于它的输出。因为从模型结构中我们可以发现，如果去掉t时刻前的输出，只保留最终的输出$o_t$，那么循环神经网络就可以用于分类任务。比如
+  - 图像分类任务，将图像按像素展开成一组序列数据，然后最终输出的是图像属于的类别
+  - 情感分析任务，将一段文字作为序列数据输入循环神经网络，输出的是这段文字对应的感情色彩（如乐观或者悲观）
+  
+  ![](./classification.jpg)
+- 此外，循环神经网络还可以用于从图像生成文字等任务，即输入的$X$是图像，而输出的是一组文字序列。
+- 尽管我们说，理论上循环神经网络RNN可以保留t时刻之前的所有信息，然而如果对预测t时刻有用的信息在非常非常久之前的地方，RNN就很难去把它们关联起来，这是因为RNN在利用反向传播算法更新网络参数过程中会出现严重的梯度消失问题，导致太久远以前的信息无法保留下来，只能保留短期记忆的信息。
+- 对于循环神经网络无法保留长期记忆的问题，研究学者们做了很多讨论来克服这个困难，其中最经典的解决方法是循环神经网络的一个变体，即长短期记忆网络（Long Short Term Memory networks，LSTM），下一章中我们会介绍LSTM网络。
+
+
+
+## 6 任务实训
+
+### 6.1 实训目的
+
+- 对循环神经网络的局限性有更直观深刻的认识和理解。
+- 体会神经网络训练过程，训练次数和准确度的关系。
+- 对数据预处理如归一化的作用有一定认识。
+
+### 6.2 实训内容
+
+- 在提供的Jupyter notebook中观察模型预测结果和模型训练迭代次数有什么关系？
+- 尝试不进行数据预处理，观测模型训练过程以及预测结果有什么变化？
+
+
