@@ -102,3 +102,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+
+CV/code/ch16/data
+CV/code/ch16/data.zip
