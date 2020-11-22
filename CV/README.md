@@ -5,7 +5,7 @@
 ### 4.图像增广应用 done
 ### 5.增强对比度应用 up
 ### 6.去雾算法应用 done
-### 7.目标检测和边界框应用 [飞机案例？](https://lab.datafountain.cn/forum?id=89)
+### 7.目标检测和边界框应用 up
 ### 8.锚框生成应用 up
 ### 9.多尺度目标检测（7的延伸？）
 ### 10.RPN应用 [ref](https://lab.datafountain.cn/forum?id=114)
