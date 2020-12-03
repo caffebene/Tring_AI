@@ -2,6 +2,9 @@
 
 <!-- ref: https://lab.datafountain.cn/forum?id=139 
 https://github.com/YunYang1994/TensorFlow2.0-Examples
+https://www.cnblogs.com/wangxiaocvpr/p/5747095.html
+http://arxiv.org/pdf/1607.07032v2.pdf
+https://github.com/zhangliliang/RPN_BF/tree/RPN-pedestrian
 -->
 
 # 任务10：RPN应用
@@ -24,7 +27,7 @@ https://github.com/YunYang1994/TensorFlow2.0-Examples
 ## 2.任务描述
 
 
-本课程讲述如何在数据量足够的情况下，不依赖于任何预训练模型，从零训练实现目标检测。本教程以卡通人物的脸检测为案例，通过学习掌握在数据量充足的情况下实现目标检测train from scratch。
+本课程讲述如何在数据量足够的情况下，不依赖于任何预训练模型，从零训练实现目标检测。本教程以多尺度人物检测为案例，通过学习掌握在数据量充足的情况下实现目标检测train from scratch。
 
 <!-- 首先我们对卡通人脸检验任务做了简要介绍，并介绍了GN和WS这两种时候从零开始训练的归一化算法。接下来再对数据进行预处理后使用mmdetection框架搭建了一个Faster R-CNN模型。然后我们测试了优化后的模型的检测能力，并将其可视化。最后对优化后的模型进行了简单的精简化处理。 -->
 
@@ -32,8 +35,29 @@ https://github.com/YunYang1994/TensorFlow2.0-Examples
 
 ## 3.知识准备
 
+### 3.1 RPN+
+虽然深度物体检测方法 如： Fast/Faster RCNN 在general 的物体检测中，展现了强大的性能，但是对于人检测却不太成功。发现 RPN 在单独的行人检测器中表现良好，但是分类器却降低了该结果。我们猜想可能是如下两个原因导致的：
+1. 对于处理小物体，feature maps 的分辨率较低；
+2. 缺乏任何 bootstrapping strategy 来挖掘 hard negative examples。
 
-### 3.1 Group Normalization (GN)
+基于这些观察，利用 RPN后 通过 boosted forests 在共享的，高分辨率的卷积特征映射（using an RPN followed by boosted forests on shared, high-resolution convolutional feature maps）。得到了相当的精度和较好的速度。
+
+<div align=center>
+    <!-- ![应用场景](./img/16cv应用场景.jpg) -->
+    <img src="./img/ch10/4.png" width="700"/>
+</div>
+
+- 采用类似Faster R-CNN的架构
+- Feature Extraction：根据 RPN 产生的 proposals，采用 RoI pooling 来区域中提取固定长度的 feature。这些 feature 可以用来训练 BF。不像 Faster RCNN 需要将这些 features 送到 originally fully-connected （fc）layers，所以就限制了其维度，BF 分类器 对于特征的维度没有限制。
+- Boosted Forest ：根据 RPN 产生的 region proposals，confidence scores，以及 features，所有的这些都用来产生级联的 Boosted Forest classifier。
+
+升级版RPN网络结构。
+<div align=center>
+    <!-- ![应用场景](./img/16cv应用场景.jpg) -->
+    <img src="./img/ch10/2.png" width="700"/>
+</div>
+
+### 3.2 Group Normalization (GN)
 当给定数据集的数据量充足时，可以在不使用任何预训练模型的情况下从零训练一个目标检测模型。其中存在的难点主要是：
 
 训练的batch size小，导致Batch Normalization 效果不佳。 目标检测模型尤其是两阶段的检测模型相比图像分类模型更为复杂，往往训练时batch size很小，导致每个batch统计获得的样本的均值和标准差波动过大，导致BN收敛困难，模型发散。
@@ -64,17 +88,10 @@ $$x_i = \frac{x_i - x_{mean}}{x_{std}}$$
 - GN： 同LN一样按照通道计算，但是是将同一通道划分为若干组来分别计算。
 所以GN并不受batch size大小的影响，非常适合用于从零训练目标检测网络
 
-### 3.2 Weight Standardization(WS)
+### 3.3 Weight Standardization(WS)
 WS借鉴了类似BN等在数据层面进行归一化的操作，将归一化操作从数据层面迁移到了模型层面，主要是对卷积层的参数进行归一化操作。
 
 和数据归一化一样，WS对卷积层的权重求均值和标准差后对其进行归一化。 同样由于WS不受batch size大小的影响，非常适合于目标检测任务的从零训练，并且能够起到很好的模型正则化效果。
-
-### 3.3 RPN+
-升级版RPN网络结构。
-<div align=center>
-    <!-- ![应用场景](./img/16cv应用场景.jpg) -->
-    <img src="./img/ch10/2.png" width="700"/>
-</div>
 
 
 ## 4. 任务实施
@@ -89,7 +106,7 @@ WS借鉴了类似BN等在数据层面进行归一化的操作，将归一化操�
 
 ### 4.2 实施步骤
 #### 步骤1：定义工具类函数
-```
+```python
 grid_h = 45
 grid_w = 60
 
@@ -280,7 +297,7 @@ def create_image_label_path_generator(synthetic_dataset_path):
 
 #### 步骤2：数据集预处理
 
-```
+```python
 def DataGenerator(synthetic_dataset_path, batch_size):
     """
     generate image and mask at the same time
@@ -309,7 +326,7 @@ TrainSet = DataGenerator(synthetic_dataset_path, batch_size)
 
 #### 步骤3：模型构造
 
-```
+```python
 import tensorflow as tf
 
 class RPNplus(tf.keras.Model):
@@ -406,7 +423,7 @@ class RPNplus(tf.keras.Model):
 
 #### 步骤4：模型训练
 
-```
+```python
 def compute_loss(target_scores, target_bboxes, target_masks, pred_scores, pred_bboxes):
     """
     target_scores shape: [1, 45, 60, 9, 2],  pred_scores shape: [1, 45, 60, 9, 2]
@@ -457,7 +474,7 @@ for epoch in range(EPOCHS):
 
 #### 步骤5：模型测试
 
-```
+```python
 import os
 import cv2
 import numpy as np
@@ -488,21 +505,6 @@ for idx in range(8000, 8200):
     print("=> saving prediction results into %s" %save_path)
     Image.fromarray(raw_image).save(save_path)
 ```
-
-
-
-
-
-#### 步骤5：程序入口
-
-
-
-
-
-#### 步骤6：绘制边界框
-
-
-
 
 
 ## 5.任务拓展
